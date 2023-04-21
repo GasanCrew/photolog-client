@@ -7,23 +7,25 @@ import datetime
 
 user = os.environ.get('RABBITMQ_DEFAULT_USER', '')
 pw = os.environ.get('RABBITMQ_DEFAULT_PASS', '')
-host = os.environ.get('RABBITMQ_HOST', '127.0.0.1:5672')
-server = os.environ.get('PHOTOLOG_SERVER_HOST', '127.0.0.1:8000')
+host = os.environ.get('RABBITMQ_HOST', 'ampq://127.0.0.1:5672')
+server = os.environ.get('PHOTOLOG_SERVER_HOST', 'http://127.0.0.1:8000')
 
 
 async def receive_data(job_data: dict):
-    job_url = f"http://{server}{job_data['job-id']}/"
-    photo_url = f"http://{server}{job_data['photo-url']}/"
+    job_url = f"{server}{job_data['job-id']}/"
+    photo_url = f"{server}{job_data['photo-url']}/"
+    copy = job_data['copy']
 
     # Download image
     async with aiohttp.ClientSession() as sess:
         async with sess.get(photo_url) as res:
-            if not res.status == 201:
+            if not res.status == 200:
                 return  # Download failed
 
             # Save the image.
             filename = res.content_disposition.filename
-            with open(f"printout/{filename}", 'wb') as f:
+            abs_filename = f"printout/{filename}"
+            with open(abs_filename, 'wb') as f:
                 while True:
                     # 1024*1024 = 1_048_576
                     chunk = await res.content.read(10485576)
@@ -38,7 +40,7 @@ async def receive_data(job_data: dict):
 
             #####
             # TODO: After downloading file
-
+            os.system(f"lp -d printer {abs_filename} -n {copy}")
             #####
 
 async def on_message(message: aio_pika.IncomingMessage):
@@ -49,6 +51,7 @@ async def on_message(message: aio_pika.IncomingMessage):
         try:
             data['job-id']
             data['photo-url']
+            data['copy']
             await receive_data(data)
         except Exception as e:
             pass
@@ -62,10 +65,13 @@ async def main():
 
     async with conn.channel() as channel:
         q = await channel.get_queue(user)
+
+        # TODO: spin-lock
         while True:
             await q.consume(on_message)
 
     await conn.close()
+
 
 if __name__ == '__main__':
     asyncio.run(main())
