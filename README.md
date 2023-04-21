@@ -1,0 +1,7 @@
+# PhotoLog Client
+
+## Environment variables
+* RABBITMQ_HOST
+* RABBITMQ_DEFAULT_USER
+* RABBITMQ_DEFAULT_PASS
+* PHOTOLOG_SERVER_HOST
